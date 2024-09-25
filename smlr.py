@@ -20,7 +20,7 @@ datascience_image = (
     .pip_install("torch", "torchvision", "numpy", "Pillow", "transformers", "tqdm", "pathlib", "annoy", "scipy", gpu="any")
 )
 
-vol = modal.Volume.from_name("spicy")
+vol = modal.Volume.from_name("image-output")
 
 # Main function to process images and cluster them based on conceptual similarity using CLIP embeddings.
 @app.function(image=datascience_image, mounts=[modal.Mount.from_local_dir("/home/barakplasma/smlr/sort", remote_path="/root/images")], volumes={"/root/output": vol})
