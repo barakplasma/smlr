@@ -1,3 +1,4 @@
+from os import PathLike
 import torch
 import numpy as np
 import shutil
@@ -24,7 +25,7 @@ vol = modal.Volume.from_name("image-output")
 
 # Main function to process images and cluster them based on conceptual similarity using CLIP embeddings.
 @app.function(image=datascience_image, mounts=[modal.Mount.from_local_dir("/home/barakplasma/smlr/sort", remote_path="/root/images")], volumes={"/root/output": vol})
-def process_images(image_directory: str | Path, clip_model: str, threshold: float, batch_size: int):
+def process_images(image_directory, clip_model: str, threshold: float, batch_size: int):
     image_directory = Path("/root/images")
     device = "cuda" if torch.cuda.is_available() else "cpu"
 
@@ -53,7 +54,7 @@ def process_images(image_directory: str | Path, clip_model: str, threshold: floa
 
     image_id_clusters = build_image_clusters(all_image_ids, labels)
 
-    organize_images(images_to_paths, "/root/output", image_id_clusters, damaged_image_ids)
+    organize_images(images_to_paths, Path("/root/output"), image_id_clusters, damaged_image_ids)
 
 # Check for existing embeddings file and load it if found, otherwise generate new embeddings
 def check_and_load_embeddings(embeddings_file):
@@ -152,7 +153,7 @@ def build_image_clusters(all_image_ids, labels):
     return image_id_clusters
 
 # Organize images into separate folders for clusters, unique images, and corrupted images
-def organize_images(images_to_paths, image_directory, image_id_clusters, damaged_image_ids):
+def organize_images(images_to_paths, image_directory: PathLike, image_id_clusters, damaged_image_ids):
     for idx, image_id_cluster in enumerate(image_id_clusters.values()):
         if len(image_id_cluster) < 2:
             continue
@@ -183,7 +184,7 @@ def main():
     parser.add_argument("--batch_size", type=int, default=192, help="Batch size for generating CLIP embeddings. Higher values will require more VRAM. (default: 192)")
     args = parser.parse_args()
 
-    process_images(str(args.image_directory), str(args.clip_model), float(args.threshold), int(args.batch_size))
+    process_images(Path(args.image_directory), str(args.clip_model), float(args.threshold), int(args.batch_size))
 
 if __name__ == "__main__":
     main()
