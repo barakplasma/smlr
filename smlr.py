@@ -11,12 +11,24 @@ from annoy import AnnoyIndex
 from scipy.cluster.hierarchy import linkage, fcluster
 from scipy.spatial.distance import squareform
 
+import modal
+
+app = modal.App("smlr")
+
+datascience_image = (
+    modal.Image.debian_slim(python_version="3.12")
+    .pip_install("torch", "torchvision", "numpy", "Pillow", "transformers", "tqdm", "pathlib", "annoy", "scipy", gpu="any")
+)
+
+vol = modal.Volume.from_name("spicy")
+
 # Main function to process images and cluster them based on conceptual similarity using CLIP embeddings.
-def process_images(image_directory, clip_model, threshold, batch_size):
-    image_directory = Path(image_directory)
+@app.function(image=datascience_image, mounts=[modal.Mount.from_local_dir("/home/barakplasma/smlr/sort", remote_path="/root/images")], volumes={"/root/output": vol})
+def process_images(image_directory: str | Path, clip_model: str, threshold: float, batch_size: int):
+    image_directory = Path("/root/images")
     device = "cuda" if torch.cuda.is_available() else "cpu"
 
-    embeddings_file = image_directory / 'embeddings.npy'
+    embeddings_file = Path('/root/output/embeddings.npy')
     regenerate_embeddings = check_and_load_embeddings(embeddings_file)
 
     # Load CLIP model and processor
@@ -25,7 +37,7 @@ def process_images(image_directory, clip_model, threshold, batch_size):
     allowed_extensions = {".jpeg", ".jpg", ".png", ".webp"}
 
     images_to_paths, all_image_ids = get_images_to_paths(image_directory, allowed_extensions)
-    damaged_image_ids, all_embeddings = generate_embeddings(all_image_ids, images_to_paths, model, processor, device, batch_size, regenerate_embeddings, embeddings_file)
+    damaged_image_ids, all_embeddings = generate_embeddings(all_image_ids, images_to_paths, model, processor, device, int(batch_size), regenerate_embeddings, embeddings_file)
 
     if regenerate_embeddings:
         np.save(embeddings_file, all_embeddings)
@@ -40,12 +52,13 @@ def process_images(image_directory, clip_model, threshold, batch_size):
     labels = apply_clustering(distances, threshold)
 
     image_id_clusters = build_image_clusters(all_image_ids, labels)
-    organize_images(images_to_paths, image_directory, image_id_clusters, damaged_image_ids)
+
+    organize_images(images_to_paths, "/root/output", image_id_clusters, damaged_image_ids)
 
 # Check for existing embeddings file and load it if found, otherwise generate new embeddings
 def check_and_load_embeddings(embeddings_file):
     if embeddings_file.exists():
-        use_existing_embeddings = input("Embeddings file found. Do you want to use existing embeddings? (Y/N) ").strip().lower()
+        use_existing_embeddings = "y"
         if use_existing_embeddings in ('', 'y', 'yes'):
             print("Loading embeddings from file...")
             all_embeddings = np.load(embeddings_file)
@@ -62,11 +75,12 @@ def get_images_to_paths(image_directory, allowed_extensions):
     return images_to_paths, list(images_to_paths.keys())
 
 # Generate CLIP embeddings for all images, handling damaged images if any
-def generate_embeddings(all_image_ids, images_to_paths, model, processor, device, batch_size, regenerate_embeddings, embeddings_file):
+def generate_embeddings(all_image_ids, images_to_paths, model, processor, device, batch_size: int, regenerate_embeddings, embeddings_file):
     if not regenerate_embeddings:
         return set(), np.load(embeddings_file)
 
-    damaged_image_ids, all_embeddings = set(), []
+    damaged_image_ids = set()
+    all_embeddings = []
     progress_bar = tqdm(total=len(all_image_ids), desc="Generating CLIP embeddings")
 
     for i in range(0, len(all_image_ids), batch_size):
@@ -169,7 +183,7 @@ def main():
     parser.add_argument("--batch_size", type=int, default=192, help="Batch size for generating CLIP embeddings. Higher values will require more VRAM. (default: 192)")
     args = parser.parse_args()
 
-    process_images(args.image_directory, args.clip_model, args.threshold, args.batch_size)
+    process_images(str(args.image_directory), str(args.clip_model), float(args.threshold), int(args.batch_size))
 
 if __name__ == "__main__":
     main()
