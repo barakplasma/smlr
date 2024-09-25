@@ -23,6 +23,8 @@ If you haven't already, you can install the required packages using pip in one g
 pip install torch torchvision numpy Pillow transformers tqdm pathlib annoy scipy
 ```
 
+This version uses Modal with a volume to run on a cloud GPU
+
 ## How it Works
 
 1. Checks if there's an existing embeddings file and loads it if found. If not, it generates embeddings for each image in the specified directory using a CLIP model from the HuggingFace Transformers library.
